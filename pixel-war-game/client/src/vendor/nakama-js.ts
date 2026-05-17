@@ -219,7 +219,7 @@ export class Client {
     return res.json();
   }
 
-  createSocket(useSsl: boolean): Socket {
+  createSocket(useSsl = this.useSsl): Socket {
     return new Socket(this.host, this.port, useSsl);
   }
 }

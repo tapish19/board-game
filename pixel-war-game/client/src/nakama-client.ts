@@ -64,6 +64,19 @@ export interface MatchData {
 
 const TOTAL_TILES = 1000;
 
+
+function toSession(value: Pick<Session, "token" | "user_id" | "username" | "exp">): Session {
+  return {
+    token: value.token,
+    user_id: value.user_id,
+    username: value.username,
+    exp: value.exp,
+    isexpired(nowSeconds: number) {
+      return nowSeconds >= value.exp;
+    },
+  };
+}
+
 function getOrCreateDeviceId(): string {
   const stored = localStorage.getItem(DEVICE_ID_STORAGE_KEY)?.trim();
   if (stored) return stored;
@@ -80,7 +93,8 @@ export function getSession(): Session | null {
   if (!raw) return null;
 
   try {
-    session = JSON.parse(raw) as Session;
+    const parsed = JSON.parse(raw) as Pick<Session, "token" | "user_id" | "username" | "exp">;
+    session = toSession(parsed);
     return session;
   } catch {
     localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -90,9 +104,9 @@ export function getSession(): Session | null {
 
 export async function authenticateDevice(username?: string): Promise<Session> {
   const newSession = await client.authenticateDevice(getOrCreateDeviceId(), true, username);
-  session = newSession;
+  session = toSession(newSession);
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
-  return newSession;
+  return session;
 }
 
 export async function openSocket(): Promise<Socket> {
