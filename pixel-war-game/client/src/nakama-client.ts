@@ -34,6 +34,7 @@ const useSsl = envSsl !== undefined
 const client = new Client(serverKey, host, port, useSsl);
 
 const SESSION_STORAGE_KEY = "pixel-war-session";
+const DEVICE_ID_STORAGE_KEY = "pixel-war-device-id";
 
 let socket: Socket | null = null;
 let session: Session | null = null;
@@ -63,8 +64,13 @@ export interface MatchData {
 
 const TOTAL_TILES = 1000;
 
-function createDeviceId(): string {
-  return `device-${Math.random().toString(36).slice(2)}`;
+function getOrCreateDeviceId(): string {
+  const stored = localStorage.getItem(DEVICE_ID_STORAGE_KEY)?.trim();
+  if (stored) return stored;
+
+  const generated = `device-${crypto.randomUUID()}`;
+  localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
+  return generated;
 }
 
 export function getSession(): Session | null {
@@ -83,7 +89,7 @@ export function getSession(): Session | null {
 }
 
 export async function authenticateDevice(username = "Player"): Promise<Session> {
-  const newSession = await client.authenticateDevice(createDeviceId(), true, username);
+  const newSession = await client.authenticateDevice(getOrCreateDeviceId(), true, username);
   session = newSession;
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
   return newSession;
