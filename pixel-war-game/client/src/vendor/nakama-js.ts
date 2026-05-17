@@ -49,7 +49,10 @@ export class Socket {
 
   async connect(session: Session, createStatus = true): Promise<void> {
     const proto = this.useSsl ? "wss" : "ws";
-    const url = `${proto}://${this.host}:${this.port}/ws?lang=en&status=${createStatus}&token=${encodeURIComponent(session.token)}`;
+    const isDefaultPort =
+      (proto === "wss" && this.port === "443") || (proto === "ws" && this.port === "80");
+    const authority = isDefaultPort ? this.host : `${this.host}:${this.port}`;
+    const url = `${proto}://${authority}/ws?lang=en&status=${createStatus}&token=${encodeURIComponent(session.token)}`;
     this.ws = new WebSocket(url);
     this.ws.onclose = () => this.ondisconnect?.();
     this.ws.onmessage = (evt) => {
