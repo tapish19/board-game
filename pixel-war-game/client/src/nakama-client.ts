@@ -88,7 +88,7 @@ export function getSession(): Session | null {
   }
 }
 
-export async function authenticateDevice(username = "Player"): Promise<Session> {
+export async function authenticateDevice(username?: string): Promise<Session> {
   const newSession = await client.authenticateDevice(getOrCreateDeviceId(), true, username);
   session = newSession;
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
