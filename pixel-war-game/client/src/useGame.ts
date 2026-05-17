@@ -1,148 +1,94 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { Socket, Session } from "@heroiclabs/nakama-js";
-import {
-  authenticateUser,
-  createMatch,
-  joinMatch,
-  createInitialGameState,
-  updateGameStateWithMove,
-  type GameState,
-  type MatchData,
-} from "./nakama-client";
+import { getSession, openSocket, joinMatch, createInitialGameState, updateGameStateWithMove, type GameState, type MatchData } from "./nakama-client";
+import type { Socket } from "@heroiclabs/nakama-js";
 
-const COOLDOWN_MS = 3000; // 3 second cooldown between moves
+const COOLDOWN_MS = 3000;
 
-export function useGame(playerColor: string) {
+export function useGame() {
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
-  const sessionRef = useRef<Session | null>(null);
-  const currentMatchIdRef = useRef<string | null>(null);
 
-  const connect = useCallback(async (user: string) => {
+  const ensureConnected = useCallback(async () => {
+    if (socketRef.current) return socketRef.current;
+
+    const session = getSession();
+    if (!session) throw new Error("Not authenticated");
+    setMyUserId(session.user_id);
+
+    const socket = await openSocket();
+    socketRef.current = socket;
+
+    socket.onmatchdata = (matchData) => {
+      const data = JSON.parse(new TextDecoder().decode(matchData.data)) as MatchData;
+      if (data.gameState) setGameState(data.gameState);
+    };
+
+    return socket;
+  }, []);
+
+  const enterMatch = useCallback(async (incomingMatchId: string): Promise<boolean> => {
     try {
       setError(null);
-      const { session, socket } = await authenticateUser(user);
+      const socket = await ensureConnected();
+      await joinMatch(socket, incomingMatchId);
+      setMatchId(incomingMatchId);
 
-      sessionRef.current = session;
-      socketRef.current = socket;
-      setUserId(session.user_id);
-      setUsername(session.username);
-      setIsConnected(true);
-
-      socket.onmatchdata = (matchData) => {
-        const data = JSON.parse(
-          new TextDecoder().decode(matchData.data)
-        ) as MatchData;
-        if (data.gameState) {
-          setGameState(data.gameState);
-        }
-      };
-
-      return socket;
-    } catch (err) {
-      setError(`Connection failed: ${err}`);
-      throw err;
-    }
-  }, []);
-
-  const createNewMatch = useCallback(async (): Promise<string> => {
-    const socket = socketRef.current;
-    if (!socket) throw new Error("Not connected");
-
-    try {
-      const matchId = await createMatch(socket);
-      currentMatchIdRef.current = matchId;
-
-      const initialState = createInitialGameState();
-      setGameState(initialState);
-
-      const data: MatchData = { gameState: initialState };
-      await socket.sendMatchState(
-        matchId,
-        1,
-        JSON.stringify(data)
-      );
-
-      return matchId;
-    } catch (err) {
-      setError(`Failed to create match: ${err}`);
-      throw err;
-    }
-  }, []);
-
-  const joinExistingMatch = useCallback(async (matchId: string) => {
-    const socket = socketRef.current;
-    if (!socket) throw new Error("Not connected");
-
-    try {
-      await joinMatch(socket, matchId);
-      currentMatchIdRef.current = matchId;
+      if (!gameState) {
+        setGameState(createInitialGameState());
+      }
+      return true;
     } catch (err) {
       setError(`Failed to join match: ${err}`);
-      throw err;
+      return false;
     }
+  }, [ensureConnected, gameState]);
+
+  const makeMove = useCallback(async (position: number) => {
+    const socket = socketRef.current;
+    const activeMatchId = matchId;
+    const activeUserId = myUserId;
+    if (!socket || !activeMatchId || !gameState || !activeUserId) return;
+    if (Date.now() < cooldownUntil) return;
+
+    try {
+      const newState = updateGameStateWithMove(gameState, position, activeUserId, "Player", "#7F77DD");
+      setGameState(newState);
+      setCooldownUntil(Date.now() + COOLDOWN_MS);
+      await socket.sendMatchState(activeMatchId, 1, JSON.stringify({ gameState: newState }));
+    } catch (err) {
+      setError(`Move failed: ${err}`);
+    }
+  }, [cooldownUntil, gameState, matchId, myUserId]);
+
+  const leaveMatch = useCallback(() => {
+    setMatchId(null);
+    setGameState(null);
   }, []);
 
-  const makeMove = useCallback(
-    async (position: number) => {
-      const socket = socketRef.current;
-      const matchId = currentMatchIdRef.current;
-      const user = username;
-      const uid = userId;
-
-      if (!socket || !matchId || !gameState || !user || !uid) {
-        return;
-      }
-
-      if (Date.now() < cooldownUntil) {
-        return;
-      }
-
-      try {
-        const newState = updateGameStateWithMove(
-          gameState,
-          position,
-          uid,
-          user,
-          playerColor
-        );
-
-        setGameState(newState);
-        setCooldownUntil(Date.now() + COOLDOWN_MS);
-
-        const data: MatchData = { gameState: newState };
-        await socket.sendMatchState(matchId, 1, JSON.stringify(data));
-      } catch (err) {
-        setError(`Move failed: ${err}`);
-      }
-    },
-    [gameState, username, userId, playerColor, cooldownUntil]
-  );
+  const setClientError = useCallback((message: string | null) => {
+    setError(message);
+  }, []);
 
   useEffect(() => {
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
+    return () => socketRef.current?.disconnect();
   }, []);
 
   return {
     gameState,
-    isConnected,
-    error,
-    userId,
-    username,
-    cooldownUntil,
+    gameOver: false,
+    matchId,
+    myUserId,
+    opponentStatus: "connected",
+    timeLeft: null,
+    enterMatch,
     makeMove,
-    connect,
-    createNewMatch,
-    joinExistingMatch,
+    leaveMatch,
+    setClientError,
+    error,
   };
 }
