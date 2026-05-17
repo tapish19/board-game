@@ -1,8 +1,17 @@
 import { Client } from "@heroiclabs/nakama-js";
 import type { Session, Socket } from "@heroiclabs/nakama-js";
 
-const client = new Client("defaultkey", "localhost", "7350");
-client.ssl = false;
+const host = import.meta.env.VITE_NAKAMA_HOST ?? window.location.hostname;
+const port = import.meta.env.VITE_NAKAMA_PORT ?? "7350";
+const serverKey = import.meta.env.VITE_NAKAMA_SERVER_KEY ?? "defaultkey";
+
+const client = new Client(serverKey, host, port);
+client.ssl = (import.meta.env.VITE_NAKAMA_SSL ?? (window.location.protocol === "https:" ? "true" : "false")) === "true";
+
+const SESSION_STORAGE_KEY = "pixel-war-session";
+
+let socket: Socket | null = null;
+let session: Session | null = null;
 
 const SESSION_STORAGE_KEY = "pixel-war-session";
 
