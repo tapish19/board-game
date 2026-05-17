@@ -5,4 +5,10 @@ COPY ./local.yml /nakama/data/local.yml
 
 ENTRYPOINT ["/bin/sh", "-ec"]
 
-CMD ["/nakama/nakama migrate up --database.address \"$DATABASE_ADDRESS\" && exec /nakama/nakama --config /nakama/data/local.yml --database.address \"$DATABASE_ADDRESS\""]
+CMD exec /nakama/nakama migrate up --database.address "$DATABASE_ADDRESS" && \
+exec /nakama/nakama \
+--name nakama1 \
+--database.address "$DATABASE_ADDRESS" \
+--logger.level INFO \
+--session.token_expiry_sec 7200 \
+--socket.server_key "$NAKAMA_SERVER_KEY"
