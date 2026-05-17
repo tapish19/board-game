@@ -10,7 +10,7 @@ function resolveConnectionConfig() {
     return {
       host: parsed.hostname,
       port: envPort ?? (parsed.port || (parsed.protocol === "https:" ? "443" : "80")),
-      ssl: parsed.protocol === "https:",
+      ssl: parsed.protocol === "https:" || parsed.protocol === "wss:",
     };
   }
 
@@ -113,7 +113,7 @@ export async function openSocket(): Promise<Socket> {
   if (socket) return socket;
 
   const activeSession = getSession() ?? (await authenticateDevice());
-  socket = client.createSocket();
+  socket = client.createSocket(useSsl, false);
   await socket.connect(activeSession, true);
   return socket;
 }
