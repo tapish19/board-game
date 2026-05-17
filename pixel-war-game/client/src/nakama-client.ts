@@ -1,17 +1,44 @@
 import { Client } from "@heroiclabs/nakama-js";
 import type { Session, Socket } from "@heroiclabs/nakama-js";
 
-const host = import.meta.env.VITE_NAKAMA_HOST ?? window.location.hostname;
-const port = import.meta.env.VITE_NAKAMA_PORT ?? "7350";
+function resolveConnectionConfig() {
+  const rawHost = (import.meta.env.VITE_NAKAMA_HOST ?? window.location.hostname).trim();
+  const envPort = import.meta.env.VITE_NAKAMA_PORT;
+
+  if (rawHost.includes("://")) {
+    const parsed = new URL(rawHost);
+    return {
+      host: parsed.hostname,
+      port: envPort ?? (parsed.port || (parsed.protocol === "https:" ? "443" : "80")),
+      ssl: parsed.protocol === "https:",
+    };
+  }
+
+  if (rawHost.includes(":")) {
+    const [hostname, hostPort] = rawHost.split(":");
+    return {
+      host: hostname,
+      port: envPort ?? hostPort,
+      ssl: hostPort === "443" || window.location.protocol === "https:",
+    };
+  }
+
+  return {
+    host: rawHost,
+    port: envPort ?? "7350",
+    ssl: window.location.protocol === "https:",
+  };
+}
+
+const { host, port, ssl } = resolveConnectionConfig();
 const serverKey = import.meta.env.VITE_NAKAMA_SERVER_KEY ?? "defaultkey";
 
 const client = new Client(serverKey, host, port);
-client.ssl = (import.meta.env.VITE_NAKAMA_SSL ?? (window.location.protocol === "https:" ? "true" : "false")) === "true";
 
-const SESSION_STORAGE_KEY = "pixel-war-session";
-
-let socket: Socket | null = null;
-let session: Session | null = null;
+const envSsl = import.meta.env.VITE_NAKAMA_SSL;
+const envSslValue = envSsl === "true";
+const forceSslForHttpsPage = window.location.protocol === "https:";
+client.ssl = forceSslForHttpsPage ? true : envSsl ? envSslValue : ssl;
 
 const SESSION_STORAGE_KEY = "pixel-war-session";
 
