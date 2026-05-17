@@ -3,6 +3,7 @@
 
 const TICK_RATE = 5; // 5 ticks per second
 const TOTAL_TILES = 1000;
+const MOVE_COOLDOWN_MS = 3000;
 
 // Op-codes for client <-> server messages
 const OpCode = {
@@ -151,8 +152,8 @@ export const matchLoop: nkruntime.MatchLoopFunction<MatchState> = (
     const player = state.players[msg.sender.userId];
     if (!player) continue;
 
-    if (msg.opCode === OpCode.GAME_STATE || msg.opCode === OpCode.MAKE_MOVE) {
-      let data: { gameState?: { tiles: (Tile | null)[], recentActions: RecentAction[] }, position?: number };
+    if (msg.opCode === OpCode.MAKE_MOVE) {
+      let data: { position?: number };
       try {
         data = JSON.parse(nk.binaryToString(msg.data));
       } catch {
@@ -160,29 +161,44 @@ export const matchLoop: nkruntime.MatchLoopFunction<MatchState> = (
         continue;
       }
 
-      if (data.gameState) {
-        const { tiles, recentActions } = data.gameState;
-        
-        if (Array.isArray(tiles) && tiles.length === TOTAL_TILES) {
-          tiles.forEach((tile, idx) => {
-            if (tile && tile.userId === player.userId) {
-              if (!state.tiles[idx] || state.tiles[idx]!.userId === player.userId) {
-                state.tiles[idx] = tile;
-              }
-            }
-          });
-          
-          if (Array.isArray(recentActions)) {
-            const newActions = recentActions.filter(a => a.username === player.username);
-            state.recentActions = [...newActions, ...state.recentActions].slice(0, 50);
-          }
-
-          const allPresences = Object.values(state.players).map(p => p.presence);
-          sendToAll(dispatcher, allPresences, OpCode.GAME_STATE, buildGameStatePayload(state));
-          
-          logger.info("Player %v updated game state", player.username);
-        }
+      const idx = data.position;
+      if (typeof idx !== "number" || !Number.isInteger(idx) || idx < 0 || idx >= TOTAL_TILES) {
+        sendToOne(dispatcher, player.presence, OpCode.ERROR, { message: "Invalid tile position" });
+        continue;
       }
+
+      const now = Date.now();
+      if (now - player.lastMoveTime < MOVE_COOLDOWN_MS) {
+        sendToOne(dispatcher, player.presence, OpCode.ERROR, { message: "Move cooldown active" });
+        continue;
+      }
+
+      const existingTile = state.tiles[idx];
+      if (existingTile && existingTile.userId !== player.userId) {
+        sendToOne(dispatcher, player.presence, OpCode.ERROR, { message: "Tile already claimed" });
+        continue;
+      }
+
+      const tile: Tile = {
+        userId: player.userId,
+        username: player.username,
+        color: player.color,
+        timestamp: now,
+      };
+      state.tiles[idx] = tile;
+      player.lastMoveTime = now;
+
+      const action: RecentAction = {
+        username: player.username,
+        color: player.color,
+        position: idx,
+        timestamp: now,
+      };
+      state.recentActions = [action, ...state.recentActions].slice(0, 50);
+
+      const allPresences = Object.values(state.players).map((p) => (p as PlayerInfo).presence);
+      sendToAll(dispatcher, allPresences, OpCode.GAME_STATE, buildGameStatePayload(state));
+      logger.info("Player %v claimed tile %v", player.username, idx);
     }
   }
 
