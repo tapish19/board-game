@@ -85,6 +85,7 @@ export function useGame() {
     myUserId,
     opponentStatus: "connected",
     timeLeft: null,
+    cooldownUntil,
     enterMatch,
     makeMove,
     leaveMatch,

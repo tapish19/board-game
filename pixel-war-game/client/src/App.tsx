@@ -24,6 +24,7 @@ export default function App() {
     myUserId,
     opponentStatus,
     timeLeft,
+    cooldownUntil,
     enterMatch,
     makeMove,
     leaveMatch,
@@ -117,6 +118,7 @@ export default function App() {
           onClientError={setClientError}
           error={gameError}
           matchId={matchId}
+          cooldownUntil={cooldownUntil}
         />
       )}
 
