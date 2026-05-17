@@ -25,7 +25,13 @@ const { host, port, ssl } = resolveConnectionConfig();
 const serverKey = import.meta.env.VITE_NAKAMA_SERVER_KEY ?? "defaultkey";
 
 const client = new Client(serverKey, host, port);
-client.ssl = (import.meta.env.VITE_NAKAMA_SSL ?? (ssl ? "true" : "false")) === "true";
+
+const envSsl = import.meta.env.VITE_NAKAMA_SSL;
+const isPageHttps = window.location.protocol === "https:";
+// Never use insecure HTTP on an HTTPS page (avoids mixed-content failures in browsers).
+client.ssl = envSsl !== undefined
+  ? envSsl === "true" || (isPageHttps && envSsl !== "true")
+  : (ssl || isPageHttps);
 
 const SESSION_STORAGE_KEY = "pixel-war-session";
 
