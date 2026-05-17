@@ -1,7 +1,13 @@
-import { Client, Session, Socket } from "@heroiclabs/nakama-js";
+import { Client } from "@heroiclabs/nakama-js";
+import type { Session, Socket } from "@heroiclabs/nakama-js";
 
 const client = new Client("defaultkey", "localhost", "7350");
 client.ssl = false;
+
+const SESSION_STORAGE_KEY = "pixel-war-session";
+
+let socket: Socket | null = null;
+let session: Session | null = null;
 
 export interface Tile {
   userId: string;
@@ -28,31 +34,77 @@ export interface MatchData {
 
 const TOTAL_TILES = 1000;
 
+function createDeviceId(): string {
+  return `device-${Math.random().toString(36).slice(2)}`;
+}
+
+export function getSession(): Session | null {
+  if (session) return session;
+
+  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    session = JSON.parse(raw) as Session;
+    return session;
+  } catch {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+export async function authenticateDevice(username = "Player"): Promise<Session> {
+  const newSession = await client.authenticateDevice(createDeviceId(), true, username);
+  session = newSession;
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
+  return newSession;
+}
+
+export async function openSocket(): Promise<Socket> {
+  if (socket) return socket;
+
+  const activeSession = getSession() ?? (await authenticateDevice());
+  socket = client.createSocket();
+  await socket.connect(activeSession, true);
+  return socket;
+}
+
+export function getSocket(): Socket | null {
+  return socket;
+}
+
+export async function findMatch(mode: "classic" | "timed"): Promise<void> {
+  const activeSocket = await openSocket();
+  const query = `+properties.mode:${mode}`;
+  await activeSocket.addMatchmaker(query, 2, 2, {
+    mode,
+  });
+}
+
+export async function createRoom(mode: "classic" | "timed"): Promise<string> {
+  const activeSocket = await openSocket();
+  const match = await activeSocket.createMatch({ mode });
+  return match.match_id;
+}
+
 export async function authenticateUser(
   username: string
 ): Promise<{ session: Session; socket: Socket }> {
-  const session = await client.authenticateDevice(
-    Math.random().toString(36).substring(7),
-    true,
-    username
-  );
-
-  const socket = client.createSocket();
-  await socket.connect(session);
-
-  return { session, socket };
+  const newSession = await authenticateDevice(username);
+  const activeSocket = await openSocket();
+  return { session: newSession, socket: activeSocket };
 }
 
-export async function createMatch(socket: Socket): Promise<string> {
-  const match = await socket.createMatch();
+export async function createMatch(activeSocket: Socket): Promise<string> {
+  const match = await activeSocket.createMatch();
   return match.match_id;
 }
 
 export async function joinMatch(
-  socket: Socket,
+  activeSocket: Socket,
   matchId: string
 ): Promise<void> {
-  await socket.joinMatch(matchId);
+  await activeSocket.joinMatch(matchId);
 }
 
 export function createInitialGameState(): GameState {
@@ -94,3 +146,27 @@ export function updateGameStateWithMove(
 }
 
 export { client };
+
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export interface PlayerStats {
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
+  return [];
+}
+
+export async function getMyStats(): Promise<PlayerStats> {
+  return { wins: 0, losses: 0, draws: 0 };
+}
