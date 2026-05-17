@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { getSession, openSocket, joinMatch, createInitialGameState, updateGameStateWithMove, type GameState, type MatchData } from "./nakama-client";
+import { getSession, openSocket, joinMatch, createInitialGameState, type GameState, type MatchData } from "./nakama-client";
 import type { Socket } from "@heroiclabs/nakama-js";
 
 const COOLDOWN_MS = 3000;
@@ -56,10 +56,8 @@ export function useGame() {
     if (Date.now() < cooldownUntil) return;
 
     try {
-      const newState = updateGameStateWithMove(gameState, position, activeUserId, "Player", "#7F77DD");
-      setGameState(newState);
       setCooldownUntil(Date.now() + COOLDOWN_MS);
-      await socket.sendMatchState(activeMatchId, 1, JSON.stringify({ gameState: newState }));
+      await socket.sendMatchState(activeMatchId, 2, JSON.stringify({ position }));
     } catch (err) {
       setError(`Move failed: ${err}`);
     }

@@ -2,8 +2,29 @@ import { Client } from "@heroiclabs/nakama-js";
 import type { Session, Socket } from "@heroiclabs/nakama-js";
 
 function resolveConnectionConfig() {
-  const rawHost = (import.meta.env.VITE_NAKAMA_HOST ?? window.location.hostname).trim();
+  const configuredHost = import.meta.env.VITE_NAKAMA_HOST?.trim();
+  const configuredUrl = import.meta.env.VITE_NAKAMA_URL?.trim();
+  const hostInput = configuredHost || configuredUrl;
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+  const rawHost = (hostInput || (isLocalhost ? window.location.hostname : "")).trim();
   const envPort = import.meta.env.VITE_NAKAMA_PORT;
+
+  if (!rawHost) {
+    throw new Error(
+      "Missing VITE_NAKAMA_HOST. Configure the Nakama API host for non-local deployments.",
+    );
+  }
+
+  // Guard against a common production misconfiguration:
+  // using the frontend hostname as Nakama host without a reverse proxy for /ws and /v2.
+  const hostOnly = rawHost.includes("://") ? new URL(rawHost).hostname : rawHost;
+  if (!isLocalhost && hostOnly === window.location.hostname) {
+    throw new Error(
+      "Nakama host points to the same domain as the frontend. Set VITE_NAKAMA_HOST to your Nakama/API domain (for example api.yourdomain.com).",
+    );
+  }
 
   if (rawHost.includes("://")) {
     const parsed = new URL(rawHost);
@@ -22,7 +43,10 @@ function resolveConnectionConfig() {
 }
 
 const { host, port, ssl } = resolveConnectionConfig();
-const serverKey = import.meta.env.VITE_NAKAMA_SERVER_KEY ?? "defaultkey";
+const serverKey =
+  import.meta.env.VITE_NAKAMA_SERVER_KEY ??
+  import.meta.env.VITE_NAKAMA_KEY ??
+  "defaultkey";
 
 const envSsl = import.meta.env.VITE_NAKAMA_SSL;
 const isPageHttps = window.location.protocol === "https:";
