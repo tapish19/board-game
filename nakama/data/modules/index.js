@@ -60,7 +60,7 @@ function saveTiles(nk, logger, tiles) {
       collection:      STORAGE_COLLECTION,
       key:             STORAGE_KEY_TILES,
       userId:          SYSTEM_USER_ID,
-      value:           JSON.stringify({ tiles: tiles }),
+      value: { tiles: tiles },
       permissionRead:  2,
       permissionWrite: 0,
     }]);
