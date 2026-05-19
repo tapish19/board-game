@@ -60,7 +60,7 @@ function saveTiles(nk, logger, tiles) {
       collection:      STORAGE_COLLECTION,
       key:             STORAGE_KEY_TILES,
       userId:          SYSTEM_USER_ID,
-      value: { tiles: tiles },
+      value:           { tiles: tiles },
       permissionRead:  2,
       permissionWrite: 0,
     }]);
@@ -141,12 +141,17 @@ function matchJoin(ctx, logger, nk, dispatcher, tick, state, presences) {
     var p    = presences[i];
     var meta = {};
     try {
-  meta = typeof p.metadata === "string"
-    ? JSON.parse(p.metadata)
-    : (p.metadata || {});
-} catch (_) {
-  meta = {};
-}
+      var md = p.metadata;
+      if (typeof md === "string" && md.length > 2) {
+        meta = JSON.parse(md);
+      } else if (md && typeof md === "object") {
+        // Nakama Go runtime passes metadata as a map — access fields directly
+        meta.username = md["username"] || md.username || "";
+        meta.color    = md["color"]    || md.color    || "";
+      }
+    } catch (_) {
+      meta = {};
+    }
 
     state.players[p.userId] = {
       presence:      p,
