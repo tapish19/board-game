@@ -369,59 +369,6 @@ Users → search by username or user ID.
 
 ---
 
-## Troubleshooting
-
-### "Auth failed" on localhost
-
-Nakama is still starting. Wait 15 seconds and refresh.  
-Check it is ready: `curl http://localhost:7350/healthcheck` should return `{}`.
-
-### "Failed to fetch" when clicking Join
-
-Your `VITE_NAKAMA_HOST` is wrong. Common mistakes:
-
-| Wrong | Correct |
-|-------|---------|
-| `https://my-app.onrender.com/` | `my-app.onrender.com` |
-| `https://my-app.onrender.com` | `my-app.onrender.com` |
-| `127.0.0.1` when targeting Render | `my-app.onrender.com` |
-
-After fixing `.env`, restart `npm run dev` (local) or redeploy to Vercel (production).
-
-### "Failed to join board" / "Disconnected"
-
-The WebSocket connected but the match join failed. Most likely causes:
-
-1. **`VITE_NAKAMA_KEY` does not match `NAKAMA_SERVER_KEY`** — both must be the same string.
-2. **Render is waking up** — the free tier sleeps after inactivity. Wait 30 seconds and retry.
-3. **SSL mismatch** — if your Render URL is `https://`, set `VITE_NAKAMA_SSL=true` and `VITE_NAKAMA_PORT=443`.
-
-### Tiles not saving (Nakama logs show `saveTiles failed`)
-
-The `value` field in `nk.storageWrite` must be a plain JS object, not a JSON string. Check `index.js` — the `saveTiles` function should pass:
-```js
-value: { tiles: tiles }    // ✓ plain object
-// NOT:
-value: JSON.stringify({ tiles: tiles })   // ✗ string — breaks storage
-```
-
-### Changes to `index.js` not taking effect locally
-
-```bash
-docker compose restart nakama
-docker compose logs -f nakama   # watch for "Pixel War module loaded"
-```
-
-### CockroachDB won't connect on Render
-
-Make sure your `DATABASE_ADDRESS` environment variable on Render is the full connection string including `?sslmode=verify-full`. CockroachDB Serverless requires SSL.
-
-### Board resets after Render redeploy
-
-This is expected if Nakama can't write to CockroachDB. Check the Render logs for `saveTiles failed` — it means the `DATABASE_ADDRESS` env var is missing or wrong.
-
----
-
 ## Quick reference
 
 ```bash
