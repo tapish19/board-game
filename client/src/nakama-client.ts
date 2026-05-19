@@ -183,7 +183,7 @@ export async function joinBoard(
   const sock = await openSocket();
   // Pass username + color as metadata so the server can read them in matchJoin
   // Pass as a plain object — Nakama Go server expects a JSON object, not a JSON string.
-  await sock.joinMatch(matchId, undefined, JSON.stringify({ username, color }));
+  await sock.joinMatch(matchId, undefined, { username, color });
 
 }
 
