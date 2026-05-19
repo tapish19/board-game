@@ -127,38 +127,39 @@ function matchInit(ctx, logger, nk, params) {
     recentActions:       [],
     ticksSinceLastSave:  0,
     totalClaimed:        tiles.filter(Boolean).length,
+    pendingMetadata:     {},   // userId -> { username, color } from matchJoinAttempt
   };
   logger.info("matchInit: %v tiles already claimed", state.totalClaimed);
   return { state: state, tickRate: TICK_RATE, label: MATCH_LABEL };
 }
 
 function matchJoinAttempt(ctx, logger, nk, dispatcher, tick, state, presence, metadata) {
+  // metadata arrives here (8th param), NOT in matchJoin presences
+  var meta = {};
+  try {
+    if (typeof metadata === "string" && metadata.length > 2) {
+      meta = JSON.parse(metadata);
+    } else if (metadata && typeof metadata === "object") {
+      meta = {
+        username: String(metadata.username || metadata["username"] || ""),
+        color:    String(metadata.color    || metadata["color"]    || ""),
+      };
+    }
+  } catch (_) {}
+
+  // Store so matchJoin can read it
+  state.pendingMetadata[presence.userId] = meta;
+  logger.info("matchJoinAttempt userId=%v username=%v color=%v", presence.userId, meta.username, meta.color);
+
   return { state: state, accept: true };
 }
 
 function matchJoin(ctx, logger, nk, dispatcher, tick, state, presences) {
   for (var i = 0; i < presences.length; i++) {
     var p    = presences[i];
-    var meta = {};
-    try {
-      var md = p.metadata;
-      logger.info("DEBUG metadata type=%v raw=%v", typeof md, JSON.stringify(md));
-
-      if (!md || md === "" || md === "{}") {
-        meta = {};
-      } else if (typeof md === "string") {
-        meta = JSON.parse(md);
-      } else if (typeof md === "object") {
-        meta = {
-          username: String(md.username || md["username"] || ""),
-          color:    String(md.color    || md["color"]    || ""),
-        };
-      }
-    } catch (e) {
-      logger.error("metadata parse error: %v", e);
-      meta = {};
-    }
-    logger.info("DEBUG resolved username=%v color=%v", meta.username, meta.color);
+    // Read metadata captured in matchJoinAttempt
+    var meta = state.pendingMetadata[p.userId] || {};
+    delete state.pendingMetadata[p.userId];
 
     state.players[p.userId] = {
       presence:      p,
@@ -316,4 +317,5 @@ function InitModule(ctx, logger, nk, initializer) {
 }
 
 globalThis.InitModule = InitModule;
+
 
