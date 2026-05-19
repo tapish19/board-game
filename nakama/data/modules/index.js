@@ -140,7 +140,13 @@ function matchJoin(ctx, logger, nk, dispatcher, tick, state, presences) {
   for (var i = 0; i < presences.length; i++) {
     var p    = presences[i];
     var meta = {};
-    try { meta = JSON.parse(p.metadata || "{}"); } catch (_) {}
+    try {
+  meta = typeof p.metadata === "string"
+    ? JSON.parse(p.metadata)
+    : (p.metadata || {});
+} catch (_) {
+  meta = {};
+}
 
     state.players[p.userId] = {
       presence:      p,
