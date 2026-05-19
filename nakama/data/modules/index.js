@@ -142,16 +142,23 @@ function matchJoin(ctx, logger, nk, dispatcher, tick, state, presences) {
     var meta = {};
     try {
       var md = p.metadata;
-      if (typeof md === "string" && md.length > 2) {
+      logger.info("DEBUG metadata type=%v raw=%v", typeof md, JSON.stringify(md));
+
+      if (!md || md === "" || md === "{}") {
+        meta = {};
+      } else if (typeof md === "string") {
         meta = JSON.parse(md);
-      } else if (md && typeof md === "object") {
-        // Nakama Go runtime passes metadata as a map — access fields directly
-        meta.username = md["username"] || md.username || "";
-        meta.color    = md["color"]    || md.color    || "";
+      } else if (typeof md === "object") {
+        meta = {
+          username: String(md.username || md["username"] || ""),
+          color:    String(md.color    || md["color"]    || ""),
+        };
       }
-    } catch (_) {
+    } catch (e) {
+      logger.error("metadata parse error: %v", e);
       meta = {};
     }
+    logger.info("DEBUG resolved username=%v color=%v", meta.username, meta.color);
 
     state.players[p.userId] = {
       presence:      p,
@@ -309,3 +316,4 @@ function InitModule(ctx, logger, nk, initializer) {
 }
 
 globalThis.InitModule = InitModule;
+
